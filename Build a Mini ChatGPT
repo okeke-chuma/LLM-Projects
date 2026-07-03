@@ -1,0 +1,33 @@
+Workflow
+
+  User
+  ↓
+  Prompt
+  ↓
+  LLM
+  ↓
+  Response
+  ↓
+  Conversation Memory
+
+Libraries
+  Use the following libraries : Transformers, Gradio, LangChain
+
+##############################################################################
+Python Code: 
+
+from transformers import pipeline
+
+chat = pipeline(
+    "text-generation",
+    model="gpt2"
+)
+
+response = chat(
+    "Explain diabetes.",
+    max_length=100
+)
+
+print(response[0]["generated_text"])
+######################################################################################
+
