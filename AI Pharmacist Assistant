@@ -1,0 +1,386 @@
+#AI Pharmacist Assistant
+#Objective: Develop an AI-powered assistant that can:
+
+#Workflow
+Summarize prescriptions
+Explain medications
+Check for potential drug interactions
+Summarize FDA drug labels
+Answer medication questions using trusted references (RAG)
+Extract adverse drug events
+Generate patient-friendly medication instructions
+Produce pharmacist reports
+Export results to Excel or PDF
+
+
+#System Architecture
+                        USER
+                          │
+        ┌─────────────────┼─────────────────┐
+        │                 │                 │
+ Upload Prescription   Ask Question    Upload Drug Label
+        │                 │                 │
+        ▼                 ▼                 ▼
+      OCR            User Prompt       PDF Extraction
+        │                 │                 │
+        └──────────────┬──┴─────────────────┘
+                       │
+                       ▼
+              Text Preprocessing
+                       │
+         Remove Noise / Normalize Text
+                       │
+                       ▼
+              Embedding Generation
+        (Sentence Transformers)
+                       │
+                       ▼
+             Vector Database (FAISS)
+                       │
+              Retrieve Relevant Chunks
+                       │
+                       ▼
+                  Large Language Model
+              (Llama 3 / Mistral / GPT)
+                       │
+     ┌──────────┬───────────┬───────────┐
+     ▼          ▼           ▼           ▼
+ Summary   Drug Interaction  ADE      Counseling
+            Detection       Extraction
+     │
+     ▼
+ Structured JSON
+     │
+     ├──────────► Excel
+     ├──────────► PDF
+     └──────────► Streamlit Dashboard
+
+
+#Project Folder
+The project folder will contain: 
+│
+├── app.py
+├── config.py
+├── requirements.txt
+│
+├── data/
+│      drugs.csv
+│      fda_labels.pdf
+│      prescriptions/
+│
+├── models/
+│
+├── vector_db/
+│
+├── outputs/
+│      report.xlsx
+│
+├── utils/
+│      pdf_reader.py
+│      rag.py
+│      prompts.py
+│      interactions.py
+│      summarizer.py
+│
+└── dashboard.py
+
+
+#Libraries to install
+#################################################
+pip install transformers
+
+pip install sentence-transformers
+
+pip install langchain
+
+pip install faiss-cpu
+
+pip install pymupdf
+
+pip install pandas
+
+pip install streamlit
+
+pip install openpyxl
+
+pip install torch
+###################################################
+
+
+#Step 1. Read PDF
+#################################################
+import fitz
+
+def read_pdf(file):
+
+    doc = fitz.open(file)
+
+    text = ""
+
+    for page in doc:
+        text += page.get_text()
+
+    return text
+#################################################
+
+
+#Step 2. Split Text
+#################################################
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+
+splitter = RecursiveCharacterTextSplitter(
+
+    chunk_size=500,
+
+    chunk_overlap=50
+
+)
+
+chunks = splitter.split_text(text)
+#################################################
+
+#Step 3. Create Embeddings
+#################################################
+from sentence_transformers import SentenceTransformer
+
+model = SentenceTransformer(
+    "all-MiniLM-L6-v2"
+)
+
+embeddings = model.encode(chunks)
+#################################################
+
+#Step 4. Store in FAISS
+#################################################
+import faiss
+import numpy as np
+
+dimension = embeddings.shape[1]
+
+index = faiss.IndexFlatL2(dimension)
+
+index.add(
+    np.array(embeddings)
+)
+#################################################
+
+
+#Step 5. Retrieve Similar Information
+#################################################
+query = "Can Metformin cause diarrhea?"
+
+query_vector = model.encode([query])
+
+D, I = index.search(
+    np.array(query_vector),
+    k=3
+)
+
+context = ""
+
+for i in I[0]:
+
+    context += chunks[i]
+#################################################
+
+
+#Step 6. Send Context to LLM
+#################################################
+from transformers import pipeline
+
+generator = pipeline(
+    "text2text-generation",
+    model="google/flan-t5-large"
+)
+
+prompt = f"""
+
+You are a licensed pharmacist.
+
+Use ONLY the supplied context.
+
+Context
+
+{context}
+
+Question
+
+{query}
+
+Answer clearly.
+"""
+
+response = generator(
+    prompt,
+    max_length=300
+)
+
+print(response[0]["generated_text"])
+#################################################
+
+
+#Step 7. Prescription Summarizer
+#################################################
+prompt = f"""
+
+Extract
+
+Medication
+
+Dose
+
+Frequency
+
+Route
+
+Duration
+
+Warnings
+
+Prescription
+
+{text}
+"""
+#################################################
+
+
+#Step 8. Drug Interaction Prompt
+#################################################
+prompt = """
+
+Evaluate these medications.
+
+Metformin
+
+Warfarin
+
+Provide
+
+Interaction
+
+Severity
+
+Mechanism
+
+Recommendation
+"""
+#################################################
+
+#Step 9. Adverse Drug Event Extraction
+#################################################
+prompt = """
+
+Extract
+
+Drug
+
+Reaction
+
+Severity
+
+Outcome
+
+Narrative
+
+Patient developed rash after taking
+Amoxicillin.
+"""
+#################################################
+
+#Step 10. Generate Patient Instructions
+#################################################
+prompt = """
+
+Explain to the patient
+
+How to take
+
+Metformin
+
+in plain English.
+
+Reading level
+
+6th Grade.
+"""
+#################################################
+
+#Step 11. Save Results
+#################################################
+import pandas as pd
+
+report = {
+
+"Medication":["Metformin"],
+
+"Dose":["500 mg"],
+
+"Frequency":["Twice Daily"]
+
+}
+
+df = pd.DataFrame(report)
+
+df.to_excel(
+    "report.xlsx",
+    index=False
+)
+#################################################
+
+#Step 12. Streamlit Interface
+#################################################
+import streamlit as st
+
+st.title("AI Pharmacist Assistant")
+
+uploaded = st.file_uploader(
+    "Upload Prescription"
+)
+
+question = st.text_input(
+    "Ask a Medication Question"
+)
+
+if st.button("Analyze"):
+
+    st.write("Processing...")
+#################################################
+
+#Overall Workflow
+
+                  Upload PDF
+                      │
+                      ▼
+               Read Prescription
+                      │
+                      ▼
+               Extract Text (OCR if needed)
+                      │
+                      ▼
+              Split into Chunks
+                      │
+                      ▼
+             Generate Embeddings
+                      │
+                      ▼
+              Store in FAISS Index
+                      │
+                      ▼
+                 User Question
+                      │
+                      ▼
+             Retrieve Relevant Chunks
+                      │
+                      ▼
+                  Build Prompt
+                      │
+                      ▼
+                     LLM
+                      │
+        ┌─────────────┼─────────────┐
+        ▼             ▼             ▼
+   Prescription   Drug Interaction  Patient
+     Summary         Analysis      Instructions
+        │
+        ▼
+   JSON / Excel / PDF / Dashboard
