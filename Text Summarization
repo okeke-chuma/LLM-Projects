@@ -1,0 +1,48 @@
+Take long documents and generate a concise summary.
+
+Examples of documetns could be: Clinical notes, Research papers, Meeting notes even email
+
+Workflow:
+
+Get Word/PDF/Text  
+        ↓
+Load Document
+        ↓
+Send text to LLM
+        ↓
+Receive summary
+        ↓
+Save summary
+
+In Python, you can use Jupyterlab, install the Libraries
+
+
+#############################################################################
+pip install transformers torch
+#############################################################################
+
+
+################################################################################
+
+from transformers import pipeline
+
+summarizer = pipeline(
+    "summarization",
+    model="facebook/bart-large-cnn"
+)
+
+text = """
+Artificial Intelligence has become one of the fastest growing
+technologies in healthcare...
+"""
+
+summary = summarizer(
+    text,
+    max_length=100,
+    min_length=30,
+    do_sample=False
+)
+
+print(summary[0]['summary_text'])
+
+######################################################################################
